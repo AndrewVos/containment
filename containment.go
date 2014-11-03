@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"sync"
 )
 
 var executer Executer
@@ -71,20 +72,39 @@ func update(configuration Configuration, image string) error {
 	if len(clusters) == 0 {
 		return errors.New(fmt.Sprintf("Couldn't find a cluster for container %q\n", image))
 	}
+
+	var outputs []string
+	var mutex sync.Mutex
+	var waitGroup sync.WaitGroup
+
+	updateImage := func(container Container, host Host) {
+		b, err := executer.Execute(
+			host.Address,
+			host.Port,
+			host.User,
+			fmt.Sprintf("sudo docker pull %v", container.Image),
+		)
+		mutex.Lock()
+		outputs = append(outputs, fmt.Sprintf("%v@%v", host))
+		if err == nil {
+			outputs = append(outputs, string(b))
+		} else {
+			outputs = append(outputs, err.Error())
+		}
+		mutex.Unlock()
+		waitGroup.Done()
+	}
+
 	for _, cluster := range clusters {
 		for _, host := range cluster.Hosts {
-			b, err := executer.Execute(
-				host.Address,
-				host.Port,
-				host.User,
-				fmt.Sprintf("sudo docker pull %v", container.Image),
-			)
-			if err == nil {
-				fmt.Println(string(b))
-			} else {
-				fmt.Println(err)
-			}
+			waitGroup.Add(1)
+			go updateImage(container, host)
 		}
+	}
+	waitGroup.Wait()
+
+	for _, output := range outputs {
+		fmt.Println(output)
 	}
 	return nil
 }
