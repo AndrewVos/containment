@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -32,7 +33,10 @@ func main() {
 		switch os.Args[1] {
 		case "update":
 			if len(os.Args) > 2 {
-				update(configuration, os.Args[2])
+				err := update(configuration, os.Args[2])
+				if err != nil {
+					log.Fatal(err)
+				}
 				return
 			}
 		}
@@ -73,25 +77,29 @@ func update(configuration Configuration, image string) error {
 		return errors.New(fmt.Sprintf("Couldn't find a cluster for container %q\n", image))
 	}
 
-	var outputs []string
-	var mutex sync.Mutex
+	outputs := make(chan string)
 	var waitGroup sync.WaitGroup
 
+	generateIdentifier := func(host Host) string {
+		return fmt.Sprintf("[%v@%v] ", host.User, host.Address)
+	}
+
 	updateImage := func(container Container, host Host) {
+		identifier := generateIdentifier(host)
 		b, err := executer.Execute(
 			host.Address,
 			host.Port,
 			host.User,
 			fmt.Sprintf("sudo docker pull %v", container.Image),
 		)
-		mutex.Lock()
-		outputs = append(outputs, fmt.Sprintf("%v@%v", host))
+
 		if err == nil {
-			outputs = append(outputs, string(b))
+			for _, s := range strings.Split(string(b), "\n") {
+				outputs <- fmt.Sprintf("%v%v", identifier, s)
+			}
 		} else {
-			outputs = append(outputs, err.Error())
+			outputs <- fmt.Sprintf("%v%v", identifier, err.Error())
 		}
-		mutex.Unlock()
 		waitGroup.Done()
 	}
 
@@ -101,11 +109,14 @@ func update(configuration Configuration, image string) error {
 			go updateImage(container, host)
 		}
 	}
+	go func() {
+		for o := range outputs {
+			fmt.Println(o)
+		}
+	}()
 	waitGroup.Wait()
+	close(outputs)
 
-	for _, output := range outputs {
-		fmt.Println(output)
-	}
 	return nil
 }
 

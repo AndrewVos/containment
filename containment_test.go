@@ -16,7 +16,7 @@ func (s *FakeExecuter) Execute(address string, port int, user string, command st
 	s.port = port
 	s.user = user
 	s.command = command
-	return nil, nil
+	return []byte("Fakely Executed"), nil
 }
 
 func TestPullsContainers(t *testing.T) {

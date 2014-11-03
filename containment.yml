@@ -1,0 +1,19 @@
+clusters:
+  -
+    name: containment-test
+    hosts:
+      -
+        address: 54.170.230.47
+        user: ubuntu
+      -
+        address: 54.73.192.243
+        user: ubuntu
+      -
+        address: 54.246.65.24
+        user: ubuntu
+
+containers:
+  -
+    image: luisbebop/docker-sinatra-hello-world
+    clusters:
+      - containment-test
