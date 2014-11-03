@@ -44,7 +44,7 @@ func TestPullsContainers(t *testing.T) {
 	expectedAddress := "1.1.1.2"
 	expectedPort := 45
 	expectedUser := "derp"
-	expectedCommand := "docker pull ubuntu"
+	expectedCommand := "sudo docker pull ubuntu"
 
 	if fakeExecuter.address != expectedAddress {
 		t.Errorf("Address should have been %v but was %v", expectedAddress, fakeExecuter.address)

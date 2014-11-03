@@ -14,7 +14,10 @@ func (s *SSHExecuter) Execute(address string, port int, user string, command str
 	arguments := []string{
 		"-T",
 		"-o", "StrictHostKeyChecking=no",
-		"-p", strconv.Itoa(port),
+	}
+	if port > 0 {
+		arguments = append(arguments, "-p")
+		arguments = append(arguments, strconv.Itoa(port))
 	}
 	arguments = append(arguments, fmt.Sprintf("%v@%v", user, address))
 	arguments = append(arguments, command)
