@@ -17,3 +17,5 @@ containers:
     image: luisbebop/docker-sinatra-hello-world
     clusters:
       - containment-test
+    ports:
+      - 80:5000

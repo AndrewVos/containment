@@ -32,8 +32,24 @@ func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "update":
-			if len(os.Args) > 2 {
+			if len(os.Args) == 3 {
 				err := update(configuration, os.Args[2])
+				if err != nil {
+					log.Fatal(err)
+				}
+				return
+			}
+		case "start":
+			if len(os.Args) == 3 {
+				err := start(configuration, os.Args[2])
+				if err != nil {
+					log.Fatal(err)
+				}
+				return
+			}
+		case "stop":
+			if len(os.Args) == 3 {
+				err := stop(configuration, os.Args[2])
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -41,6 +57,7 @@ func main() {
 			}
 		}
 	}
+
 	fmt.Println(`Usage:
   containment status
   containment update IMAGE
@@ -67,25 +84,33 @@ func status() error {
 	return nil
 }
 
-func update(configuration Configuration, image string) error {
+func findContainerAndClusters(configuration Configuration, image string) (Container, []Cluster, error) {
 	container, exists := configuration.FindContainerByImageName(image)
 	if !exists {
-		return errors.New(fmt.Sprintf("Couldn't find container %q\n", image))
+		return Container{}, nil, errors.New(fmt.Sprintf("Couldn't find container %q\n", image))
 	}
 	clusters := configuration.FindClustersThatShouldHaveContainer(container)
 	if len(clusters) == 0 {
-		return errors.New(fmt.Sprintf("Couldn't find a cluster for container %q\n", image))
+		return Container{}, nil, errors.New(fmt.Sprintf("Couldn't find a cluster for container %q\n", image))
+	}
+	return container, clusters, nil
+}
+
+func hostIdentifier(host Host) string {
+	return fmt.Sprintf("[%v@%v] ", host.User, host.Address)
+}
+
+func update(configuration Configuration, image string) error {
+	container, clusters, err := findContainerAndClusters(configuration, image)
+	if err != nil {
+		return err
 	}
 
 	outputs := make(chan string)
 	var waitGroup sync.WaitGroup
 
-	generateIdentifier := func(host Host) string {
-		return fmt.Sprintf("[%v@%v] ", host.User, host.Address)
-	}
-
 	updateImage := func(container Container, host Host) {
-		identifier := generateIdentifier(host)
+		identifier := hostIdentifier(host)
 		b, err := executer.Execute(
 			host.Address,
 			host.Port,
@@ -121,10 +146,65 @@ func update(configuration Configuration, image string) error {
 }
 
 func start(configuration Configuration, image string) error {
+	container, clusters, err := findContainerAndClusters(configuration, image)
+	if err != nil {
+		return err
+	}
+
+	command := fmt.Sprintf("sudo docker run -d --name %v ", container.Name())
+	for _, port := range container.Ports {
+		command += fmt.Sprintf("-p %v ", port)
+	}
+	command += container.Image
+
+	for _, cluster := range clusters {
+		for _, host := range cluster.Hosts {
+			identifier := hostIdentifier(host)
+			b, err := executer.Execute(
+				host.Address,
+				host.Port,
+				host.User,
+				command,
+			)
+			if err == nil {
+				for _, s := range strings.Split(string(b), "\n") {
+					fmt.Printf("%v%v\n", identifier, s)
+				}
+			} else {
+				fmt.Printf("%v%v\n", identifier, err.Error())
+			}
+		}
+	}
+
 	return nil
 }
 
 func stop(configuration Configuration, image string) error {
+	container, clusters, err := findContainerAndClusters(configuration, image)
+	if err != nil {
+		return err
+	}
+
+	for _, cluster := range clusters {
+		for _, host := range cluster.Hosts {
+			identifier := hostIdentifier(host)
+			command := fmt.Sprintf("sudo docker stop %v && sudo docker rm %v", container.Name(), container.Name())
+			b, err := executer.Execute(
+				host.Address,
+				host.Port,
+				host.User,
+				command,
+			)
+			if err == nil {
+				for _, s := range strings.Split(string(b), "\n") {
+					fmt.Printf("%v%v\n", identifier, s)
+				}
+			} else {
+				fmt.Printf("%v%v\n", identifier, err.Error())
+			}
+		}
+	}
+
 	return nil
 }
 

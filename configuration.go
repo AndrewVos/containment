@@ -1,5 +1,10 @@
 package main
 
+import (
+	"regexp"
+	"strings"
+)
+
 type Configuration struct {
 	Clusters   []Cluster
 	Containers []Container
@@ -40,4 +45,11 @@ type Cluster struct {
 type Container struct {
 	Image    string
 	Clusters []string
+	Ports    []string
+}
+
+func (c Container) Name() string {
+	name := strings.Replace(c.Image, "/", "-", -1)
+	re := regexp.MustCompile("[^a-zA-Z0-9_.-]")
+	return re.ReplaceAllString(name, "")
 }
