@@ -111,12 +111,7 @@ func update(configuration Configuration, image string) error {
 
 	updateImage := func(container Container, host Host) {
 		identifier := hostIdentifier(host)
-		b, err := executer.Execute(
-			host.Address,
-			host.Port,
-			host.User,
-			fmt.Sprintf("sudo docker pull %v", container.Image),
-		)
+		b, err := executer.Execute(host, fmt.Sprintf("sudo docker pull %v", container.Image))
 
 		if err == nil {
 			for _, s := range strings.Split(string(b), "\n") {
@@ -160,12 +155,7 @@ func start(configuration Configuration, image string) error {
 	for _, cluster := range clusters {
 		for _, host := range cluster.Hosts {
 			identifier := hostIdentifier(host)
-			b, err := executer.Execute(
-				host.Address,
-				host.Port,
-				host.User,
-				command,
-			)
+			b, err := executer.Execute(host, command)
 			if err == nil {
 				for _, s := range strings.Split(string(b), "\n") {
 					fmt.Printf("%v%v\n", identifier, s)
@@ -189,12 +179,7 @@ func stop(configuration Configuration, image string) error {
 		for _, host := range cluster.Hosts {
 			identifier := hostIdentifier(host)
 			command := fmt.Sprintf("sudo docker stop %v && sudo docker rm %v", container.Name(), container.Name())
-			b, err := executer.Execute(
-				host.Address,
-				host.Port,
-				host.User,
-				command,
-			)
+			b, err := executer.Execute(host, command)
 			if err == nil {
 				for _, s := range strings.Split(string(b), "\n") {
 					fmt.Printf("%v%v\n", identifier, s)

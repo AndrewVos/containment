@@ -1,23 +1,33 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 )
 
 type FakeExecuter struct {
-	address string
-	port    int
+	host    Host
 	command string
-	user    string
 }
 
-func (s *FakeExecuter) Execute(address string, port int, user string, command string) ([]byte, error) {
-	s.address = address
-	s.port = port
-	s.user = user
-	s.command = command
+func (f *FakeExecuter) Execute(host Host, command string) ([]byte, error) {
+	f.host = host
+	f.command = command
 	return []byte("Fakely Executed"), nil
+}
+
+func (f *FakeExecuter) Validate(t *testing.T, expectedAddress string, expectedPort int, expectedUser string, expectedCommand string) {
+	if f.host.Address != expectedAddress {
+		t.Errorf("Address should have been %q but was %q", expectedAddress, f.host.Address)
+	}
+	if f.host.Port != expectedPort {
+		t.Errorf("Port should have been %q but was %q", expectedPort, f.host.Port)
+	}
+	if f.host.User != expectedUser {
+		t.Errorf("User should have been %q but was %q", expectedUser, f.host.User)
+	}
+	if f.command != expectedCommand {
+		t.Errorf("Command should have been \n%q\nbut was\n%q", expectedCommand, f.command)
+	}
 }
 
 func TestPullsContainers(t *testing.T) {
@@ -45,23 +55,7 @@ func TestPullsContainers(t *testing.T) {
 		t.Error(err)
 	}
 
-	expectedAddress := "1.1.1.2"
-	expectedPort := 45
-	expectedUser := "derp"
-	expectedCommand := "sudo docker pull ubuntu"
-
-	if fakeExecuter.address != expectedAddress {
-		t.Errorf("Address should have been %q but was %q", expectedAddress, fakeExecuter.address)
-	}
-	if fakeExecuter.port != expectedPort {
-		t.Errorf("Port should have been %q but was %q", expectedPort, fakeExecuter.port)
-	}
-	if fakeExecuter.user != expectedUser {
-		t.Errorf("User should have been %q but was %q", expectedUser, fakeExecuter.user)
-	}
-	if fakeExecuter.command != expectedCommand {
-		t.Errorf("Command should have been \n%q\nbut was\n%q", expectedCommand, fakeExecuter.command)
-	}
+	fakeExecuter.Validate(t, "1.1.1.2", 45, "derp", "sudo docker pull ubuntu")
 }
 
 func TestStartsContainers(t *testing.T) {
@@ -90,24 +84,7 @@ func TestStartsContainers(t *testing.T) {
 		t.Error(err)
 	}
 
-	expectedAddress := "1.1.1.2"
-	expectedPort := 45
-	expectedUser := "derp"
-	expectedCommand := "sudo docker run -d --name something-something -p 80:80 -p 123:123 something/something"
-
-	fmt.Println(fakeExecuter)
-	if fakeExecuter.address != expectedAddress {
-		t.Errorf("Address should have been %q but was %q", expectedAddress, fakeExecuter.address)
-	}
-	if fakeExecuter.port != expectedPort {
-		t.Errorf("Port should have been %d but was %d", expectedPort, fakeExecuter.port)
-	}
-	if fakeExecuter.user != expectedUser {
-		t.Errorf("User should have been %q but was %q", expectedUser, fakeExecuter.user)
-	}
-	if fakeExecuter.command != expectedCommand {
-		t.Errorf("Command should have been \n%q\nbut was\n%q", expectedCommand, fakeExecuter.command)
-	}
+	fakeExecuter.Validate(t, "1.1.1.2", 45, "derp", "sudo docker run -d --name something-something -p 80:80 -p 123:123 something/something")
 }
 
 func TestStopsContainers(t *testing.T) {
@@ -136,21 +113,5 @@ func TestStopsContainers(t *testing.T) {
 		t.Error(err)
 	}
 
-	expectedAddress := "1.1.1.2"
-	expectedPort := 45
-	expectedUser := "derp"
-	expectedCommand := "sudo docker stop something-something && sudo docker rm something-something"
-
-	if fakeExecuter.address != expectedAddress {
-		t.Errorf("Address should have been %q but was %q", expectedAddress, fakeExecuter.address)
-	}
-	if fakeExecuter.port != expectedPort {
-		t.Errorf("Port should have been %d but was %d", expectedPort, fakeExecuter.port)
-	}
-	if fakeExecuter.user != expectedUser {
-		t.Errorf("User should have been %q but was %q", expectedUser, fakeExecuter.user)
-	}
-	if fakeExecuter.command != expectedCommand {
-		t.Errorf("Command should have been \n%q\nbut was\n%q", expectedCommand, fakeExecuter.command)
-	}
+	fakeExecuter.Validate(t, "1.1.1.2", 45, "derp", "sudo docker stop something-something && sudo docker rm something-something")
 }

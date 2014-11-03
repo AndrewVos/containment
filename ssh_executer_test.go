@@ -13,7 +13,7 @@ func TestExecutesCommand(t *testing.T) {
 	defer container.Kill()
 
 	executer := &SSHExecuter{}
-	b, _ := executer.Execute(container.ip, container.port, container.user, "echo hello!")
+	b, _ := executer.Execute(Host{Address: container.ip, Port: container.port, User: container.user}, "echo hello!")
 	output := string(b)
 	if strings.Contains(output, "hello!") == false {
 		t.Errorf("Expected output to contain some echoed text but was this:\n%v\n", output)

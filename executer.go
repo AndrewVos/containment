@@ -1,5 +1,5 @@
 package main
 
 type Executer interface {
-	Execute(address string, port int, user string, command string) ([]byte, error)
+	Execute(host Host, command string) ([]byte, error)
 }

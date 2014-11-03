@@ -10,16 +10,16 @@ import (
 
 type SSHExecuter struct{}
 
-func (s *SSHExecuter) Execute(address string, port int, user string, command string) ([]byte, error) {
+func (s *SSHExecuter) Execute(host Host, command string) ([]byte, error) {
 	arguments := []string{
 		"-T",
 		"-o", "StrictHostKeyChecking=no",
 	}
-	if port > 0 {
+	if host.Port > 0 {
 		arguments = append(arguments, "-p")
-		arguments = append(arguments, strconv.Itoa(port))
+		arguments = append(arguments, strconv.Itoa(host.Port))
 	}
-	arguments = append(arguments, fmt.Sprintf("%v@%v", user, address))
+	arguments = append(arguments, fmt.Sprintf("%v@%v", host.User, host.Address))
 	arguments = append(arguments, command)
 
 	cmd := exec.Command("ssh", arguments...)
@@ -35,7 +35,7 @@ func (s *SSHExecuter) Execute(address string, port int, user string, command str
 
 	err = cmd.Wait()
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("I had some problems running %q on %q:\nError:\n%v\nOutput:\n%v", command, address, err, string(buffer.Bytes())))
+		return nil, errors.New(fmt.Sprintf("I had some problems running %q on %q:\nError:\n%v\nOutput:\n%v", command, host.Address, err, string(buffer.Bytes())))
 	}
 
 	return buffer.Bytes(), nil
