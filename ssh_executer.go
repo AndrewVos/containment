@@ -30,12 +30,12 @@ func (s *SSHExecuter) Execute(host Host, command string) ([]byte, error) {
 
 	err := cmd.Start()
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("I couldn't launch ssh:\n%v", err))
+		return nil, err
 	}
 
 	err = cmd.Wait()
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("I had some problems running %q on %q:\nError:\n%v\nOutput:\n%v", command, host.Address, err, string(buffer.Bytes())))
+		return nil, errors.New(string(buffer.Bytes()))
 	}
 
 	return buffer.Bytes(), nil

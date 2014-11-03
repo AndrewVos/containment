@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"gopkg.in/yaml.v2"
@@ -96,8 +98,21 @@ func findContainerAndClusters(configuration Configuration, image string) (Contai
 	return container, clusters, nil
 }
 
-func hostIdentifier(host Host) string {
-	return fmt.Sprintf("[%v@%v] ", host.User, host.Address)
+func executeCommandAndWriteOutput(container Container, host Host, command string) {
+	b, err := executer.Execute(host, command)
+
+	if err == nil {
+		scanner := bufio.NewScanner(bytes.NewReader(b))
+		for scanner.Scan() {
+			fmt.Printf("%v%v\n", host.Identifier(), scanner.Text())
+		}
+	} else {
+		scanner := bufio.NewScanner(strings.NewReader(err.Error()))
+		for scanner.Scan() {
+			fmt.Printf("%v%v\n", host.Identifier(), scanner.Text())
+		}
+
+	}
 }
 
 func update(configuration Configuration, image string) error {
@@ -106,36 +121,19 @@ func update(configuration Configuration, image string) error {
 		return err
 	}
 
-	outputs := make(chan string)
 	var waitGroup sync.WaitGroup
-
-	updateImage := func(container Container, host Host) {
-		identifier := hostIdentifier(host)
-		b, err := executer.Execute(host, fmt.Sprintf("sudo docker pull %v", container.Image))
-
-		if err == nil {
-			for _, s := range strings.Split(string(b), "\n") {
-				outputs <- fmt.Sprintf("%v%v", identifier, s)
-			}
-		} else {
-			outputs <- fmt.Sprintf("%v%v", identifier, err.Error())
-		}
-		waitGroup.Done()
-	}
 
 	for _, cluster := range clusters {
 		for _, host := range cluster.Hosts {
 			waitGroup.Add(1)
-			go updateImage(container, host)
+			go func(container Container, host Host) {
+				command := fmt.Sprintf("sudo docker pull %v", container.Image)
+				executeCommandAndWriteOutput(container, host, command)
+				waitGroup.Done()
+			}(container, host)
 		}
 	}
-	go func() {
-		for o := range outputs {
-			fmt.Println(o)
-		}
-	}()
 	waitGroup.Wait()
-	close(outputs)
 
 	return nil
 }
@@ -154,15 +152,7 @@ func start(configuration Configuration, image string) error {
 
 	for _, cluster := range clusters {
 		for _, host := range cluster.Hosts {
-			identifier := hostIdentifier(host)
-			b, err := executer.Execute(host, command)
-			if err == nil {
-				for _, s := range strings.Split(string(b), "\n") {
-					fmt.Printf("%v%v\n", identifier, s)
-				}
-			} else {
-				fmt.Printf("%v%v\n", identifier, err.Error())
-			}
+			executeCommandAndWriteOutput(container, host, command)
 		}
 	}
 
@@ -177,19 +167,10 @@ func stop(configuration Configuration, image string) error {
 
 	for _, cluster := range clusters {
 		for _, host := range cluster.Hosts {
-			identifier := hostIdentifier(host)
 			command := fmt.Sprintf("sudo docker stop %v && sudo docker rm %v", container.Name(), container.Name())
-			b, err := executer.Execute(host, command)
-			if err == nil {
-				for _, s := range strings.Split(string(b), "\n") {
-					fmt.Printf("%v%v\n", identifier, s)
-				}
-			} else {
-				fmt.Printf("%v%v\n", identifier, err.Error())
-			}
+			executeCommandAndWriteOutput(container, host, command)
 		}
 	}
-
 	return nil
 }
 

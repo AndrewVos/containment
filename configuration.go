@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 )
@@ -35,6 +36,10 @@ type Host struct {
 	Address string
 	Port    int
 	User    string
+}
+
+func (h Host) Identifier() string {
+	return fmt.Sprintf("[%v@%v] ", h.User, h.Address)
 }
 
 type Cluster struct {
