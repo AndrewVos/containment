@@ -1,6 +1,6 @@
 # containment
 
-Docker container management for large amounts of servers
+Docker container management for large amounts of servers.
 
 This is very much a work in progress. I haven't even decided whether it's a good idea.
 
