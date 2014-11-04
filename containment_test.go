@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"testing"
 )
 
@@ -10,11 +11,12 @@ type FakeExecuter struct {
 	command      string
 }
 
-func (f *FakeExecuter) Execute(host Host, command string) ([]byte, error) {
+func (f *FakeExecuter) Execute(host Host, command string, writer io.Writer) error {
 	f.executedTask = true
 	f.host = host
 	f.command = command
-	return []byte("Fakely Executed"), nil
+	writer.Write([]byte("Fakely Executed"))
+	return nil
 }
 
 func (f *FakeExecuter) Validate(t *testing.T, expectedAddress string, expectedPort int, expectedUser string, expectedCommand string) {

@@ -73,6 +73,14 @@ func main() {
 				}
 				return
 			}
+		case "logs":
+			if len(os.Args) == 3 {
+				err := logs(configuration, os.Args[2])
+				if err != nil {
+					log.Fatal(err)
+				}
+				return
+			}
 		}
 	}
 
@@ -111,8 +119,10 @@ func findContainerAndClusters(configuration Configuration, image string) (Contai
 }
 
 func executeCommandAndWriteOutput(container Container, host Host, command string) error {
-	b, err := executer.Execute(host, command)
-	scanner := bufio.NewScanner(bytes.NewReader(b))
+	buffer := &bytes.Buffer{}
+	err := executer.Execute(host, command, buffer)
+
+	scanner := bufio.NewScanner(buffer)
 	for scanner.Scan() {
 		fmt.Printf("%v %v\n", host.Identifier(), scanner.Text())
 	}
@@ -132,20 +142,20 @@ func status(configuration Configuration, image string) error {
 			waitGroup.Add(1)
 			go func(container Container, host Host) {
 				command := fmt.Sprintf("sudo docker inspect -f '{{.State.Running}}' %v", container.Name())
-				b, err := executer.Execute(host, command)
+				buffer := &bytes.Buffer{}
+				err := executer.Execute(host, command, buffer)
 
 				if err == nil {
 					status := "running"
-					if strings.TrimSpace(string(b)) != "true" {
+					if strings.TrimSpace(buffer.String()) != "true" {
 						status = "stopped"
 					}
 					fmt.Printf("%v %v %v\n", host.Identifier(), container.Image, status)
 				} else {
-					scanner := bufio.NewScanner(bytes.NewReader(b))
+					scanner := bufio.NewScanner(buffer)
 					for scanner.Scan() {
 						fmt.Printf("%v %v\n", host.Identifier(), scanner.Text())
 					}
-
 				}
 				waitGroup.Done()
 			}(container, host)
@@ -169,11 +179,12 @@ func update(configuration Configuration, image string) error {
 			waitGroup.Add(1)
 			go func(container Container, host Host) {
 				command := fmt.Sprintf("sudo docker pull %v", container.Image)
-				output, err := executer.Execute(host, command)
+				buffer := &bytes.Buffer{}
+				err := executer.Execute(host, command, buffer)
 				if err == nil {
 					fmt.Printf("%v Updated %v\n", host.Identifier(), container.Image)
 				} else {
-					fmt.Printf("%v Failed to update %v\n%v\n", host.Identifier(), container.Image, string(output))
+					fmt.Printf("%v Failed to update %v\n%v\n", host.Identifier(), container.Image, buffer.String())
 				}
 				waitGroup.Done()
 			}(container, host)
@@ -198,11 +209,12 @@ func start(configuration Configuration, image string) error {
 
 	for _, cluster := range clusters {
 		for _, host := range cluster.Hosts {
-			output, err := executer.Execute(host, command)
+			buffer := &bytes.Buffer{}
+			err := executer.Execute(host, command, buffer)
 			if err == nil {
 				fmt.Printf("%v Started %v\n", host.Identifier(), container.Image)
 			} else {
-				fmt.Printf("%v Failed to start %v\n%v\n", host.Identifier(), container.Image, string(output))
+				fmt.Printf("%v Failed to start %v\n%v\n", host.Identifier(), container.Image, buffer.String())
 			}
 		}
 	}
@@ -219,11 +231,12 @@ func stop(configuration Configuration, image string) error {
 	for _, cluster := range clusters {
 		for _, host := range cluster.Hosts {
 			command := fmt.Sprintf("sudo docker stop %v && sudo docker rm %v", container.Name(), container.Name())
-			output, err := executer.Execute(host, command)
+			buffer := &bytes.Buffer{}
+			err := executer.Execute(host, command, buffer)
 			if err == nil {
 				fmt.Printf("%v Stopped %v\n", host.Identifier(), container.Image)
 			} else {
-				fmt.Printf("%v Failed to stop %v\n%v\n", host.Identifier(), container.Image, string(output))
+				fmt.Printf("%v Failed to stop %v\n%v\n", host.Identifier(), container.Image, buffer.String())
 			}
 		}
 	}
@@ -258,5 +271,36 @@ func restart(configuration Configuration, image string) error {
 }
 
 func logs(configuration Configuration, image string) error {
+	container, clusters, err := findContainerAndClusters(configuration, image)
+	if err != nil {
+		return err
+	}
+	command := fmt.Sprintf("sudo docker logs -f %v", container.Name())
+
+	var waitGroup sync.WaitGroup
+	for _, cluster := range clusters {
+		for _, host := range cluster.Hosts {
+			waitGroup.Add(1)
+			go func(host Host, command string) {
+				executer.Execute(host, command, HostLogWriter{host})
+				waitGroup.Done()
+			}(host, command)
+		}
+	}
+	waitGroup.Wait()
+
 	return nil
+}
+
+type HostLogWriter struct {
+	Host
+}
+
+func (l HostLogWriter) Write(p []byte) (n int, err error) {
+	reader := bytes.NewReader(p)
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		fmt.Printf("%v %v\n", l.Host.Identifier(), scanner.Text())
+	}
+	return len(p), nil
 }

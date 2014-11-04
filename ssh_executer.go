@@ -4,51 +4,75 @@ import (
 	"code.google.com/p/go.crypto/ssh"
 	"code.google.com/p/go.crypto/ssh/agent"
 	"fmt"
+	"io"
 	"net"
 	"os"
+	"sync"
 )
 
-type SSHExecuter struct{}
+type SSHExecuter struct {
+	mutex   sync.Mutex
+	auths   []ssh.AuthMethod
+	clients map[string]*ssh.Client
+}
 
-func (s *SSHExecuter) Execute(host Host, command string) ([]byte, error) {
-	var auths []ssh.AuthMethod
-
-	sock, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
-	if err == nil {
-		agent := agent.NewClient(sock)
-		signers, err := agent.Signers()
+func (s *SSHExecuter) loadAuths() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if s.auths == nil {
+		sock, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
 		if err == nil {
-			auths = []ssh.AuthMethod{ssh.PublicKeys(signers...)}
+			agent := agent.NewClient(sock)
+			signers, err := agent.Signers()
+			if err == nil {
+				s.auths = []ssh.AuthMethod{ssh.PublicKeys(signers...)}
+			}
 		}
 	}
+}
 
-	clientConfig := &ssh.ClientConfig{
-		User: host.User,
-		Auth: auths,
-	}
-	clientConfig.SetDefaults()
+func (s *SSHExecuter) Execute(host Host, command string, out io.Writer) error {
+	s.loadAuths()
 
-	port := 22
-	if host.Port > 0 {
-		port = host.Port
+	s.mutex.Lock()
+	if s.clients == nil {
+		s.clients = map[string]*ssh.Client{}
 	}
-	addressAndPort := fmt.Sprintf("%v:%d", host.Address, port)
+	s.mutex.Unlock()
 
-	client, err := ssh.Dial("tcp", addressAndPort, clientConfig)
-	if err != nil {
-		return nil, err
+	if _, ok := s.clients[host.Identifier()]; !ok {
+		clientConfig := &ssh.ClientConfig{
+			User: host.User,
+			Auth: s.auths,
+		}
+		clientConfig.SetDefaults()
+
+		port := 22
+		if host.Port > 0 {
+			port = host.Port
+		}
+		addressAndPort := fmt.Sprintf("%v:%d", host.Address, port)
+
+		client, err := ssh.Dial("tcp", addressAndPort, clientConfig)
+		if err != nil {
+			return err
+		}
+		s.mutex.Lock()
+		s.clients[host.Identifier()] = client
+		s.mutex.Unlock()
 	}
+	client := s.clients[host.Identifier()]
 
 	session, err := client.NewSession()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer session.Close()
 
-	output, err := session.CombinedOutput(command)
-	if err != nil {
-		return output, err
-	}
+	session.Stdout = out
+	session.Stderr = out
 
-	return output, nil
+	err = session.Run(command)
+	return err
+
 }
