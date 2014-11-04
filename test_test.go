@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -73,11 +75,12 @@ CMD /usr/sbin/sshd -D`
 	defer file.Close()
 	file.Write([]byte(dockerFile))
 	cmd := exec.Command("docker", "build", "-t", "containment/test", ".")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	buffer := &bytes.Buffer{}
+	cmd.Stdout = buffer
+	cmd.Stderr = buffer
 	err = cmd.Run()
 	if err != nil {
-		panic(err)
+		log.Fatalln(err, buffer.Bytes())
 	}
 }
 

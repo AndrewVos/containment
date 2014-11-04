@@ -57,11 +57,19 @@ func main() {
 				}
 				return
 			}
+		case "status":
+			if len(os.Args) == 3 {
+				err := status(configuration, os.Args[2])
+				if err != nil {
+					log.Fatal(err)
+				}
+				return
+			}
 		}
 	}
 
 	fmt.Println(`Usage:
-  containment status
+  containment status IMAGE
   containment update IMAGE
   containment start IMAGE
   containment stop IMAGE
@@ -82,10 +90,6 @@ func main() {
 	}
 }
 
-func status() error {
-	return nil
-}
-
 func findContainerAndClusters(configuration Configuration, image string) (Container, []Cluster, error) {
 	container, exists := configuration.FindContainerByImageName(image)
 	if !exists {
@@ -104,15 +108,52 @@ func executeCommandAndWriteOutput(container Container, host Host, command string
 	if err == nil {
 		scanner := bufio.NewScanner(bytes.NewReader(b))
 		for scanner.Scan() {
-			fmt.Printf("%v%v\n", host.Identifier(), scanner.Text())
+			fmt.Printf("%v %v\n", host.Identifier(), scanner.Text())
 		}
 	} else {
 		scanner := bufio.NewScanner(strings.NewReader(err.Error()))
 		for scanner.Scan() {
-			fmt.Printf("%v%v\n", host.Identifier(), scanner.Text())
+			fmt.Printf("%v %v\n", host.Identifier(), scanner.Text())
 		}
 
 	}
+}
+
+func status(configuration Configuration, image string) error {
+	container, clusters, err := findContainerAndClusters(configuration, image)
+	if err != nil {
+		return err
+	}
+
+	var waitGroup sync.WaitGroup
+
+	for _, cluster := range clusters {
+		for _, host := range cluster.Hosts {
+			waitGroup.Add(1)
+			go func(container Container, host Host) {
+				command := fmt.Sprintf("sudo docker inspect -f '{{.State.Running}}' %v", container.Name())
+				b, err := executer.Execute(host, command)
+				status := "running"
+				if strings.TrimSpace(string(b)) != "true" {
+					status = "stopped"
+				}
+
+				if err == nil {
+					fmt.Printf("%v %v %v\n", host.Identifier(), container.Image, status)
+				} else {
+					scanner := bufio.NewScanner(strings.NewReader(err.Error()))
+					for scanner.Scan() {
+						fmt.Printf("%v %v\n", host.Identifier(), scanner.Text())
+					}
+
+				}
+				waitGroup.Done()
+			}(container, host)
+		}
+	}
+	waitGroup.Wait()
+
+	return nil
 }
 
 func update(configuration Configuration, image string) error {

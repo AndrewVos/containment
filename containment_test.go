@@ -50,7 +50,10 @@ func TestPullsContainers(t *testing.T) {
 		},
 	}
 
-	err := update(configuration, "ubuntu")
+	var err error
+	captureStdout(func() {
+		err = update(configuration, "ubuntu")
+	})
 	if err != nil {
 		t.Error(err)
 	}
@@ -79,7 +82,10 @@ func TestStartsContainers(t *testing.T) {
 		},
 	}
 
-	err := start(configuration, "something/something")
+	var err error
+	captureStdout(func() {
+		err = start(configuration, "something/something")
+	})
 	if err != nil {
 		t.Error(err)
 	}
@@ -108,10 +114,49 @@ func TestStopsContainers(t *testing.T) {
 		},
 	}
 
-	err := stop(configuration, "something/something")
+	var err error
+	captureStdout(func() {
+		err = stop(configuration, "something/something")
+	})
 	if err != nil {
 		t.Error(err)
 	}
 
 	fakeExecuter.Validate(t, "1.1.1.2", 45, "derp", "sudo docker stop something-something && sudo docker rm something-something")
+}
+
+func TestListsContainerStatus(t *testing.T) {
+	oldExecuter := executer
+	defer func() { executer = oldExecuter }()
+	fakeExecuter := &FakeExecuter{}
+	executer = fakeExecuter
+
+	configuration := Configuration{
+		Clusters: []Cluster{
+			Cluster{
+				Name: "some-cluster", Hosts: []Host{Host{Address: "1.1.1.2", Port: 45, User: "derp"}},
+			},
+		},
+		Containers: []Container{
+			Container{
+				Image:    "something/something",
+				Clusters: []string{"some-cluster"},
+				Ports:    []string{"80:80", "123:123"},
+			},
+		},
+	}
+
+	var err error
+	output := captureStdout(func() {
+		err = status(configuration, "something/something")
+	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	fakeExecuter.Validate(t, "1.1.1.2", 45, "derp", "sudo docker inspect -f '{{.State.Running}}' something-something")
+
+	if expected := "[derp@1.1.1.2] something/something stopped\n"; output != expected {
+		t.Errorf("Expected output to be\n%q\nbut was\n%q", expected, output)
+	}
 }

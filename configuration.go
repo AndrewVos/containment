@@ -39,7 +39,7 @@ type Host struct {
 }
 
 func (h Host) Identifier() string {
-	return fmt.Sprintf("[%v@%v] ", h.User, h.Address)
+	return fmt.Sprintf("[%v@%v]", h.User, h.Address)
 }
 
 type Cluster struct {
