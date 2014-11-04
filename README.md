@@ -14,7 +14,7 @@ go get github.com/AndrewVos/containment
 
 ## Example configuration
 
-```yaml
+```yml
 clusters:
   -
     name: containment-test
