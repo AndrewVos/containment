@@ -5,17 +5,22 @@ import (
 )
 
 type FakeExecuter struct {
-	host    Host
-	command string
+	executedTask bool
+	host         Host
+	command      string
 }
 
 func (f *FakeExecuter) Execute(host Host, command string) ([]byte, error) {
+	f.executedTask = true
 	f.host = host
 	f.command = command
 	return []byte("Fakely Executed"), nil
 }
 
 func (f *FakeExecuter) Validate(t *testing.T, expectedAddress string, expectedPort int, expectedUser string, expectedCommand string) {
+	if f.executedTask == false {
+		t.Fatal("Expected a task to be executed")
+	}
 	if f.host.Address != expectedAddress {
 		t.Errorf("Address should have been %q but was %q", expectedAddress, f.host.Address)
 	}
@@ -106,6 +111,28 @@ func TestStopsContainers(t *testing.T) {
 	}
 
 	fakeExecuter.Validate(t, "1.1.1.2", 45, "derp", "sudo docker stop something-something && sudo docker rm something-something")
+}
+
+func TestRestartsContainers(t *testing.T) {
+	enableFakeExecuter()
+	defer disablefakeExecuter()
+
+	configuration := simpleConfiguration()
+
+	_, err := captureStdout(func() error {
+		return restart(configuration, "something/something")
+	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	fakeExecuter.Validate(
+		t,
+		"1.1.1.2",
+		45,
+		"derp",
+		"sudo docker stop something-something && sudo docker rm something-something && sudo docker run -d --name something-something -p 80:80 -p 123:123 something/something",
+	)
 }
 
 func TestListsContainerStatus(t *testing.T) {

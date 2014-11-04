@@ -57,6 +57,14 @@ func main() {
 				}
 				return
 			}
+		case "restart":
+			if len(os.Args) == 3 {
+				err := restart(configuration, os.Args[2])
+				if err != nil {
+					log.Fatal(err)
+				}
+				return
+			}
 		case "status":
 			if len(os.Args) == 3 {
 				err := status(configuration, os.Args[2])
@@ -216,6 +224,29 @@ func stop(configuration Configuration, image string) error {
 }
 
 func restart(configuration Configuration, image string) error {
+	container, clusters, err := findContainerAndClusters(configuration, image)
+	if err != nil {
+		return err
+	}
+
+	runCommand := fmt.Sprintf("sudo docker run -d --name %v ", container.Name())
+	for _, port := range container.Ports {
+		runCommand += fmt.Sprintf("-p %v ", port)
+	}
+	commands := []string{
+		fmt.Sprintf("sudo docker stop %v", container.Name()),
+		fmt.Sprintf("sudo docker rm %v", container.Name()),
+		runCommand,
+	}
+	command := strings.Join(commands, " && ")
+	command += container.Image
+
+	for _, cluster := range clusters {
+		for _, host := range cluster.Hosts {
+			executeCommandAndWriteOutput(container, host, command)
+		}
+	}
+
 	return nil
 }
 
