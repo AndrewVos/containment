@@ -30,44 +30,21 @@ func (f *FakeExecuter) Validate(t *testing.T, expectedAddress string, expectedPo
 	}
 }
 
-func TestPullsContainers(t *testing.T) {
-	oldExecuter := executer
-	defer func() { executer = oldExecuter }()
-	fakeExecuter := &FakeExecuter{}
+var oldExecuter Executer
+var fakeExecuter *FakeExecuter
+
+func enableFakeExecuter() {
+	oldExecuter = executer
+	fakeExecuter = &FakeExecuter{}
 	executer = fakeExecuter
-
-	configuration := Configuration{
-		Clusters: []Cluster{
-			Cluster{
-				Name: "some-cluster",
-				Hosts: []Host{
-					Host{Address: "1.1.1.2", Port: 45, User: "derp"},
-				},
-			},
-		},
-		Containers: []Container{
-			Container{Image: "ubuntu", Clusters: []string{"some-cluster"}},
-		},
-	}
-
-	var err error
-	captureStdout(func() {
-		err = update(configuration, "ubuntu")
-	})
-	if err != nil {
-		t.Error(err)
-	}
-
-	fakeExecuter.Validate(t, "1.1.1.2", 45, "derp", "sudo docker pull ubuntu")
 }
 
-func TestStartsContainers(t *testing.T) {
-	oldExecuter := executer
-	defer func() { executer = oldExecuter }()
-	fakeExecuter := &FakeExecuter{}
-	executer = fakeExecuter
+func disablefakeExecuter() {
+	executer = oldExecuter
+}
 
-	configuration := Configuration{
+func simpleConfiguration() Configuration {
+	return Configuration{
 		Clusters: []Cluster{
 			Cluster{
 				Name: "some-cluster", Hosts: []Host{Host{Address: "1.1.1.2", Port: 45, User: "derp"}},
@@ -81,6 +58,30 @@ func TestStartsContainers(t *testing.T) {
 			},
 		},
 	}
+}
+
+func TestPullsContainers(t *testing.T) {
+	enableFakeExecuter()
+	defer disablefakeExecuter()
+
+	configuration := simpleConfiguration()
+
+	var err error
+	captureStdout(func() {
+		err = update(configuration, "something/something")
+	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	fakeExecuter.Validate(t, "1.1.1.2", 45, "derp", "sudo docker pull something/something")
+}
+
+func TestStartsContainers(t *testing.T) {
+	enableFakeExecuter()
+	defer disablefakeExecuter()
+
+	configuration := simpleConfiguration()
 
 	var err error
 	captureStdout(func() {
@@ -94,25 +95,10 @@ func TestStartsContainers(t *testing.T) {
 }
 
 func TestStopsContainers(t *testing.T) {
-	oldExecuter := executer
-	defer func() { executer = oldExecuter }()
-	fakeExecuter := &FakeExecuter{}
-	executer = fakeExecuter
+	enableFakeExecuter()
+	defer disablefakeExecuter()
 
-	configuration := Configuration{
-		Clusters: []Cluster{
-			Cluster{
-				Name: "some-cluster", Hosts: []Host{Host{Address: "1.1.1.2", Port: 45, User: "derp"}},
-			},
-		},
-		Containers: []Container{
-			Container{
-				Image:    "something/something",
-				Clusters: []string{"some-cluster"},
-				Ports:    []string{"80:80", "123:123"},
-			},
-		},
-	}
+	configuration := simpleConfiguration()
 
 	var err error
 	captureStdout(func() {
@@ -126,25 +112,10 @@ func TestStopsContainers(t *testing.T) {
 }
 
 func TestListsContainerStatus(t *testing.T) {
-	oldExecuter := executer
-	defer func() { executer = oldExecuter }()
-	fakeExecuter := &FakeExecuter{}
-	executer = fakeExecuter
+	enableFakeExecuter()
+	defer disablefakeExecuter()
 
-	configuration := Configuration{
-		Clusters: []Cluster{
-			Cluster{
-				Name: "some-cluster", Hosts: []Host{Host{Address: "1.1.1.2", Port: 45, User: "derp"}},
-			},
-		},
-		Containers: []Container{
-			Container{
-				Image:    "something/something",
-				Clusters: []string{"some-cluster"},
-				Ports:    []string{"80:80", "123:123"},
-			},
-		},
-	}
+	configuration := simpleConfiguration()
 
 	var err error
 	output := captureStdout(func() {
