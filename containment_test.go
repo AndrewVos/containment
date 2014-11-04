@@ -66,9 +66,8 @@ func TestPullsContainers(t *testing.T) {
 
 	configuration := simpleConfiguration()
 
-	var err error
-	captureStdout(func() {
-		err = update(configuration, "something/something")
+	_, err := captureStdout(func() error {
+		return update(configuration, "something/something")
 	})
 	if err != nil {
 		t.Error(err)
@@ -83,9 +82,8 @@ func TestStartsContainers(t *testing.T) {
 
 	configuration := simpleConfiguration()
 
-	var err error
-	captureStdout(func() {
-		err = start(configuration, "something/something")
+	_, err := captureStdout(func() error {
+		return start(configuration, "something/something")
 	})
 	if err != nil {
 		t.Error(err)
@@ -100,9 +98,8 @@ func TestStopsContainers(t *testing.T) {
 
 	configuration := simpleConfiguration()
 
-	var err error
-	captureStdout(func() {
-		err = stop(configuration, "something/something")
+	_, err := captureStdout(func() error {
+		return stop(configuration, "something/something")
 	})
 	if err != nil {
 		t.Error(err)
@@ -117,9 +114,8 @@ func TestListsContainerStatus(t *testing.T) {
 
 	configuration := simpleConfiguration()
 
-	var err error
-	output := captureStdout(func() {
-		err = status(configuration, "something/something")
+	output, err := captureStdout(func() error {
+		return status(configuration, "something/something")
 	})
 	if err != nil {
 		t.Error(err)

@@ -84,13 +84,13 @@ CMD /usr/sbin/sshd -D`
 	}
 }
 
-func captureStdout(f func()) string {
+func captureStdout(f func() error) (string, error) {
 	tempFile, _ := ioutil.TempFile("", "stdout")
 	oldStdout := os.Stdout
 	os.Stdout = tempFile
-	f()
+	err := f()
 	os.Stdout = oldStdout
 	tempFile.Close()
 	b, _ := ioutil.ReadFile(tempFile.Name())
-	return string(b)
+	return string(b), err
 }
