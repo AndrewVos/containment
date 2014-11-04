@@ -110,21 +110,13 @@ func findContainerAndClusters(configuration Configuration, image string) (Contai
 	return container, clusters, nil
 }
 
-func executeCommandAndWriteOutput(container Container, host Host, command string) {
+func executeCommandAndWriteOutput(container Container, host Host, command string) error {
 	b, err := executer.Execute(host, command)
-
-	if err == nil {
-		scanner := bufio.NewScanner(bytes.NewReader(b))
-		for scanner.Scan() {
-			fmt.Printf("%v %v\n", host.Identifier(), scanner.Text())
-		}
-	} else {
-		scanner := bufio.NewScanner(strings.NewReader(err.Error()))
-		for scanner.Scan() {
-			fmt.Printf("%v %v\n", host.Identifier(), scanner.Text())
-		}
-
+	scanner := bufio.NewScanner(bytes.NewReader(b))
+	for scanner.Scan() {
+		fmt.Printf("%v %v\n", host.Identifier(), scanner.Text())
 	}
+	return err
 }
 
 func status(configuration Configuration, image string) error {
@@ -141,15 +133,15 @@ func status(configuration Configuration, image string) error {
 			go func(container Container, host Host) {
 				command := fmt.Sprintf("sudo docker inspect -f '{{.State.Running}}' %v", container.Name())
 				b, err := executer.Execute(host, command)
-				status := "running"
-				if strings.TrimSpace(string(b)) != "true" {
-					status = "stopped"
-				}
 
 				if err == nil {
+					status := "running"
+					if strings.TrimSpace(string(b)) != "true" {
+						status = "stopped"
+					}
 					fmt.Printf("%v %v %v\n", host.Identifier(), container.Image, status)
 				} else {
-					scanner := bufio.NewScanner(strings.NewReader(err.Error()))
+					scanner := bufio.NewScanner(bytes.NewReader(b))
 					for scanner.Scan() {
 						fmt.Printf("%v %v\n", host.Identifier(), scanner.Text())
 					}
@@ -177,7 +169,12 @@ func update(configuration Configuration, image string) error {
 			waitGroup.Add(1)
 			go func(container Container, host Host) {
 				command := fmt.Sprintf("sudo docker pull %v", container.Image)
-				executeCommandAndWriteOutput(container, host, command)
+				output, err := executer.Execute(host, command)
+				if err == nil {
+					fmt.Printf("%v Updated %v\n", host.Identifier(), container.Image)
+				} else {
+					fmt.Printf("%v Failed to update %v\n%v\n", host.Identifier(), container.Image, string(output))
+				}
 				waitGroup.Done()
 			}(container, host)
 		}
@@ -201,7 +198,12 @@ func start(configuration Configuration, image string) error {
 
 	for _, cluster := range clusters {
 		for _, host := range cluster.Hosts {
-			executeCommandAndWriteOutput(container, host, command)
+			output, err := executer.Execute(host, command)
+			if err == nil {
+				fmt.Printf("%v Started %v\n", host.Identifier(), container.Image)
+			} else {
+				fmt.Printf("%v Failed to start %v\n%v\n", host.Identifier(), container.Image, string(output))
+			}
 		}
 	}
 
@@ -217,7 +219,12 @@ func stop(configuration Configuration, image string) error {
 	for _, cluster := range clusters {
 		for _, host := range cluster.Hosts {
 			command := fmt.Sprintf("sudo docker stop %v && sudo docker rm %v", container.Name(), container.Name())
-			executeCommandAndWriteOutput(container, host, command)
+			output, err := executer.Execute(host, command)
+			if err == nil {
+				fmt.Printf("%v Stopped %v\n", host.Identifier(), container.Image)
+			} else {
+				fmt.Printf("%v Failed to stop %v\n%v\n", host.Identifier(), container.Image, string(output))
+			}
 		}
 	}
 	return nil

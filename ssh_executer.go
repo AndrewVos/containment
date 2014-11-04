@@ -1,42 +1,54 @@
 package main
 
 import (
-	"bytes"
-	"errors"
+	"code.google.com/p/go.crypto/ssh"
+	"code.google.com/p/go.crypto/ssh/agent"
 	"fmt"
-	"os/exec"
-	"strconv"
+	"net"
+	"os"
 )
 
 type SSHExecuter struct{}
 
 func (s *SSHExecuter) Execute(host Host, command string) ([]byte, error) {
-	arguments := []string{
-		"-T",
-		"-o", "StrictHostKeyChecking=no",
+	var auths []ssh.AuthMethod
+
+	sock, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
+	if err == nil {
+		agent := agent.NewClient(sock)
+		signers, err := agent.Signers()
+		if err == nil {
+			auths = []ssh.AuthMethod{ssh.PublicKeys(signers...)}
+		}
 	}
+
+	clientConfig := &ssh.ClientConfig{
+		User: host.User,
+		Auth: auths,
+	}
+	clientConfig.SetDefaults()
+
+	port := 22
 	if host.Port > 0 {
-		arguments = append(arguments, "-p")
-		arguments = append(arguments, strconv.Itoa(host.Port))
+		port = host.Port
 	}
-	arguments = append(arguments, fmt.Sprintf("%v@%v", host.User, host.Address))
-	arguments = append(arguments, command)
+	addressAndPort := fmt.Sprintf("%v:%d", host.Address, port)
 
-	cmd := exec.Command("ssh", arguments...)
-
-	buffer := &bytes.Buffer{}
-	cmd.Stdout = buffer
-	cmd.Stderr = buffer
-
-	err := cmd.Start()
+	client, err := ssh.Dial("tcp", addressAndPort, clientConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	err = cmd.Wait()
+	session, err := client.NewSession()
 	if err != nil {
-		return nil, errors.New(string(buffer.Bytes()))
+		return nil, err
+	}
+	defer session.Close()
+
+	output, err := session.CombinedOutput(command)
+	if err != nil {
+		return output, err
 	}
 
-	return buffer.Bytes(), nil
+	return output, nil
 }
