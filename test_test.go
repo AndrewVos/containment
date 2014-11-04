@@ -51,6 +51,10 @@ func (c *dockerContainer) Kill() {
 }
 
 func buildTestDockerContainer() {
+	if os.Getenv("BUILD_CONTAINER") == "" {
+		return
+	}
+
 	dockerFile := `
 FROM ubuntu
 
